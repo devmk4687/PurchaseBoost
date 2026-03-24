@@ -15,9 +15,12 @@ class Campaign extends Model
         'type',
         'config',
         'status',
+        'start_date',
+        'end_date',
     ];
 
     protected $casts = [
         'config' => 'array',
+        'is_active' => 'boolean',
     ];
 }

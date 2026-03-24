@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CampaignController;
 use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\AgentController;
 
 
 /*
@@ -38,6 +39,12 @@ Route::prefix('v1')->group(function () {
 
     Route::apiResource('orders', OrderController::class);
     Route::patch('orders/{order}/return', [OrderController::class, 'returnOrder']);
+
+    // Route::middleware('auth:sanctum')->group(function() {
+    //     Route::post('agent/run',[AgentController::class,'run']);
+    // });
+
+    Route::post('agent/run',[AgentController::class,'run']);
 
 });
 
