@@ -28,6 +28,11 @@
     </div>
 
     <div class="mb-3">
+        <label>Type</label>
+        <input type="text" name="type" class="form-control">
+    </div>
+
+    <div class="mb-3">
         <label>Start Date</label>
         <input type="date" name="start_date" class="form-control" required>
     </div>

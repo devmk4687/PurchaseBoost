@@ -32,6 +32,5 @@ Route::middleware('auth')->group(function () {
     Route::resource('campaigns', CampaignController::class);
     
     // status toggle
-    Route::post('/campaigns/{id}/toggle', [CampaignController::class, 'toggleStatus'])->name('campaign.toggle');
+    Route::post('/campaigns/{campaign}/toggle', [CampaignController::class, 'toggleStatus'])->name('campaign.toggle');
 });
-

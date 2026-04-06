@@ -7,6 +7,13 @@ use Illuminate\Http\Request;
 
 class CampaignController extends Controller
 {
+    private function resolveStatus(Request $request): string
+    {
+        return $request->boolean('is_active')
+            ? Campaign::STATUS_PUBLISHED
+            : Campaign::STATUS_DRAFT;
+    }
+
     /**
      * Display a listing of the resource.
      *
@@ -37,18 +44,20 @@ class CampaignController extends Controller
      */
     public function store(Request $request)
     {
-          $request->validate([
-                'name' => 'required',
-                'start_date' => 'required|date',
+        $request->validate([
+            'name' => 'required',
+            'start_date' => 'required|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
         ]);
 
         Campaign::create([
             'name' => $request->name,
             'description' => $request->description,
+            'type' => $request->type,
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
             'config' => $request->config,
-            'status' => $request->has('published'),
+            'status' => $this->resolveStatus($request),
         ]);
 
         return redirect()->route('campaigns.index')->with('success', 'Campaign created!');
@@ -83,17 +92,22 @@ class CampaignController extends Controller
      * @param  \App\Models\Campaign  $campaign
      * @return \Illuminate\Http\Response
      */
-    public function update(Request $request)
+    public function update(Request $request, Campaign $campaign)
     {
-        $campaign2 = Campaign::findOrFail($request->id);
+        $request->validate([
+            'name' => 'required',
+            'start_date' => 'required|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+        ]);
 
-        $campaign2->update([
+        $campaign->update([
             'name' => $request->name,
             'description' => $request->description,
+            'type' => $request->type,
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
             'config' => $request->config,
-            'status' => $request->has('published'),
+            'status' => $this->resolveStatus($request),
         ]);
 
         return redirect()->route('campaigns.index')->with('success', 'Campaign updated!');
@@ -105,19 +119,19 @@ class CampaignController extends Controller
      * @param  \App\Models\Campaign  $campaign
      * @return \Illuminate\Http\Response
      */
-    public function destroy(Campaign $campaign, Request $id)
+    public function destroy(Campaign $campaign)
     {
-        Campaign::findOrFail($id)->delete();
+        $campaign->delete();
 
         return redirect()->back()->with('success', 'Deleted!');
     }
 
 
-    public function toggleStatus(Request $id)
+    public function toggleStatus(Campaign $campaign)
     {
-        $campaign = Campaign::findOrFail($id);
-
-        $campaign->is_active = !$campaign->is_active;
+        $campaign->status = $campaign->is_active
+            ? Campaign::STATUS_DRAFT
+            : Campaign::STATUS_PUBLISHED;
         $campaign->save();
 
         return redirect()->back();

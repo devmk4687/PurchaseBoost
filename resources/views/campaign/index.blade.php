@@ -32,7 +32,7 @@
                 @if($campaign->is_active)
                     <span class="badge bg-success">Active</span>
                 @else
-                    <span class="badge bg-danger">Inactive</span>
+                    <span class="badge bg-danger">Draft</span>
                 @endif
             </td>
 

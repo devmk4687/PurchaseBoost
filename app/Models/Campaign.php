@@ -9,7 +9,10 @@ class Campaign extends Model
 {
     use HasFactory;
 
-     protected $fillable = [
+    public const STATUS_DRAFT = 'draft';
+    public const STATUS_PUBLISHED = 'published';
+
+    protected $fillable = [
         'name',
         'description',
         'type',
@@ -21,6 +24,10 @@ class Campaign extends Model
 
     protected $casts = [
         'config' => 'array',
-        'is_active' => 'boolean',
     ];
+
+    public function getIsActiveAttribute(): bool
+    {
+        return $this->status === self::STATUS_PUBLISHED;
+    }
 }
