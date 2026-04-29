@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Contracts\TierAwardServiceInterface;
 use App\Services\OrderReturnService;
 use App\Services\CampaignPointsService;
+use App\Services\OrderCreationService;
 use App\Models\Order;
 use App\Models\Transaction;
 
@@ -15,11 +16,12 @@ class OrderController extends Controller
     //create the instance variable for Tier Service
     protected $tierService;
 
-    //create the instance variable for Order return service.
+    //create the instance variable for Order return service. 
     protected $returnService;
 
     //create the instance variable for Campaign Points
     protected $campPointsService;
+    protected $orderCreationService;
 
     public function index(Request $request){
         $order = Order::query()
@@ -37,69 +39,32 @@ class OrderController extends Controller
 
     public function __construct(TierAwardServiceInterface $tierService,
     OrderReturnService $returnService,
-    CampaignPointsService $campPointsService
+    CampaignPointsService $campPointsService,
+    OrderCreationService $orderCreationService
         ) {
         $this->tierService = $tierService;
         $this->returnService = $returnService;
         $this->campPointsService = $campPointsService;
+        $this->orderCreationService = $orderCreationService;
     }
 
     public function store(Request $request){
-
-        if(Order::where('orderId',$request->orderId)->exists()){
-            return response()->json([
-            'message' => 'Order already present',
-            ], 200);
-        }
-
-        $customerId = $request->custId;
-
-        //campaign set or not check and recalculate the order points
-        if(!$this->campPointsService->processCampaign($request)){
-            $orderPoints = $request->price;
-        }else{
-            $orderPoints = $this->campPointsService->processCampaign($request);
-        }
-        //Transaction can manage the cunstomers order points
-        $transaction = Transaction::create([
-            "custId"=>$customerId,
-            "orderId"=>$request->orderId,
-            "credit"=>$orderPoints,
-            "debit"=>0
+        $validated = $request->validate([
+            'custId' => ['required', 'integer'],
+            'orderId' => ['required', 'string'],
+            'price' => ['required', 'numeric'],
+            'orderStatus' => ['required', 'integer'],
+            'orderDate' => ['required', 'date'],
+            'description' => ['nullable', 'string'],
+            'orderDetails' => ['nullable'],
         ]);
 
-        $totalCreditPoints = Transaction::where('custId',$customerId)->sum('credit');
+        $result = $this->orderCreationService->create($validated);
 
-        $totalDebitPoints = Transaction::where('custId',$customerId)->sum('debit');
-
-        $balance = $totalCreditPoints - $totalDebitPoints;
-
-        $orderDetailsString = json_encode($request->orderDetails);
-        
-        $order = Order::create([
-            "price"=>$request->price,
-            "custId"=>$customerId,
-            "orderId"=>$request->orderId,
-            "orderStatus"=>$request->orderStatus,
-            "description"=>$orderDetailsString,
-            "created_at"=>$request->orderDate
-        ]);
-        
-
-        $tier = $this->tierService->determineTier($balance);
-
-        $order->update([
-            "tierStatus"=>$tier
-        ]);
-
-       return response()->json([
-            'message' => 'Order created',
-            'transactionId' => $transaction->id,
-            'orderCreationId' => $order->id,
-            'orderPoints'=> $orderPoints,
-            'balance'=> $balance,
-            "tier"=>$tier
-            ], 201);
+        return response()->json(
+            ['message' => $result['message']] + $result,
+            $result['status'] === 'created' ? 201 : 200
+        );
     }
 
     public function returnOrder(Request $request, Order $order){

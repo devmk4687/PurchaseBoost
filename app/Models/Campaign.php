@@ -26,6 +26,11 @@ class Campaign extends Model
         'config' => 'array',
     ];
 
+    public function communicationLogs()
+    {
+        return $this->hasMany(CommunicationLog::class);
+    }
+
     public function getIsActiveAttribute(): bool
     {
         return $this->status === self::STATUS_PUBLISHED;

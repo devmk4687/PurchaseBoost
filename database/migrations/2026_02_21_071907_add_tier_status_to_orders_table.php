@@ -13,6 +13,10 @@ return new class extends Migration
      */
     public function up()
     {
+        if (! Schema::hasTable('orders') || Schema::hasColumn('orders', 'tierStatus')) {
+            return;
+        }
+
         Schema::table('orders', function (Blueprint $table) {
             $table->string('tierStatus')->nullable();
         });
@@ -25,8 +29,12 @@ return new class extends Migration
      */
     public function down()
     {
+        if (! Schema::hasTable('orders') || ! Schema::hasColumn('orders', 'tierStatus')) {
+            return;
+        }
+
         Schema::table('orders', function (Blueprint $table) {
-            //
+            $table->dropColumn('tierStatus');
         });
     }
 };

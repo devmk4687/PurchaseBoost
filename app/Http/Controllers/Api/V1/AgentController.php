@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use Illuminate\Support\Facades\Http;
 use App\Http\Controllers\Controller;
 use App\Models\AgentLog;
 use Illuminate\Http\Request;
 use App\Services\PlannerService;
 use App\Services\ExecutionService;
+use Illuminate\Validation\ValidationException;
 
 
 class AgentController extends Controller
@@ -20,31 +20,40 @@ class AgentController extends Controller
       $this->executionservice = $executionservice;
    }
    public function run(Request $request){
-    //set the goal from request
-    $goal = $request->input('goal');
+        $payload = $request->validate([
+            'goal' => ['required', 'string'],
+            'channel' => ['nullable', 'in:email,sms,whatsapp'],
+            'customer_ids' => ['required', 'array', 'min:1'],
+            'customer_ids.*' => ['integer', 'exists:customer_details,id'],
+            'template_id' => ['nullable', 'integer', 'exists:communication_templates,id'],
+            'send_now' => ['nullable', 'boolean'],
+        ]);
 
-    //make the plan by planner service into steps
-    //$plan = app(PlannerService::class)->createPlan($goal);
-    $plan = $this->plannerservice->createPlan($goal);
+        $payload['channel'] = $payload['channel'] ?? 'email';
+        $payload['send_now'] = (bool) ($payload['send_now'] ?? false);
 
-    //execute the plan using executer service
-    //$results = app(ExecutionService::class)->execute($plan);
-    $results = $this->executionservice->execute($plan);
+        $plan = $this->plannerservice->createPlan($payload);
 
-    //dtore the Agent response log
-    AgentLog::create([
-         'goal' => $goal,
-         'plan' => json_encode($plan),
-         'result' => json_encode($results)
-      ]);
+        try {
+            $results = $this->executionservice->execute($plan);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'message' => 'Campaign agent execution failed.',
+                'errors' => $exception->errors(),
+                'plan' => $plan,
+            ], 422);
+        }
 
-      //return the response
-     return response()->json([
-            'goal' => $goal,
+        AgentLog::create([
+            'goal' => $payload['goal'],
+            'plan' => json_encode($plan),
+            'result' => json_encode($results)
+        ]);
+
+        return response()->json([
+            'goal' => $payload['goal'],
             'plan' => $plan,
             'result' => $results
         ]);
-
-      
    }
 }

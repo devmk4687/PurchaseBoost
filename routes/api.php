@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CampaignController;
+use App\Http\Controllers\Api\V1\CommunicationTemplateController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\AgentController;
 use App\Http\Controllers\CsvImportController;
@@ -33,8 +34,11 @@ Route::prefix('v1')->group(function () {
     });
 
     Route::middleware('auth:sanctum')->group(function() {
-        Route::apiResource('campaigns', CampaignController::class);
+        Route::apiResource('campaigns', CampaignController::class)->names('api.campaigns');
+        Route::get('campaign-customers', [CampaignController::class, 'customers']);
+        Route::get('campaigns/{campaign}/logs', [CampaignController::class, 'logs']);
         Route::post('campaign/{campaign}/publish',[CampaignController::class,'publish']);
+        Route::apiResource('message-templates', CommunicationTemplateController::class)->names('api.message-templates');
 
     });
 
@@ -47,4 +51,3 @@ Route::prefix('v1')->group(function () {
     Route::post('csv/import',[CsvImportController::class,'import']);
 
 });
-

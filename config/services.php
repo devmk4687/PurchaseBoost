@@ -37,4 +37,22 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
+    'sms' => [
+        'provider' => env('SMS_PROVIDER', 'twilio'),
+        'webhook_url' => env('SMS_WEBHOOK_URL'),
+        'token' => env('SMS_WEBHOOK_TOKEN'),
+    ],
+
+    'twilio' => [
+        'account_sid' => env('TWILIO_ACCOUNT_SID'),
+        'auth_token' => env('TWILIO_AUTH_TOKEN'),
+        'from' => env('TWILIO_FROM'),
+        'messaging_service_sid' => env('TWILIO_MESSAGING_SERVICE_SID'),
+    ],
+
+    'whatsapp' => [
+        'webhook_url' => env('WHATSAPP_WEBHOOK_URL'),
+        'token' => env('WHATSAPP_WEBHOOK_TOKEN'),
+    ],
+
 ];
