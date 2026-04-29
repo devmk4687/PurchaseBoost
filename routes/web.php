@@ -24,6 +24,10 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('message-templates/images/{filename}', [MessageTemplateImageController::class, 'show'])
+    ->where('filename', '[A-Za-z0-9._-]+')
+    ->name('message-templates.images.show');
+
 Auth::routes();
 
 //Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');

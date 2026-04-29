@@ -143,6 +143,10 @@ class CampaignExecutionService
             return $this->sendTwilioSms($recipient, $message);
         }
 
+        if ($serviceKey === 'whatsapp' && config('services.whatsapp.provider') === 'twilio') {
+            return $this->sendTwilioWhatsapp($recipient, $message);
+        }
+
         $url = config("services.{$serviceKey}.webhook_url");
         $token = config("services.{$serviceKey}.token");
 
@@ -205,6 +209,49 @@ class CampaignExecutionService
         return ['failed', $error];
     }
 
+    private function sendTwilioWhatsapp(string $recipient, string $message): array
+    {
+        $accountSid = config('services.twilio.account_sid');
+        $authToken = config('services.twilio.auth_token');
+        $from = config('services.twilio.whatsapp_from');
+        $body = $this->prepareWhatsappBody($message);
+        $mediaUrls = $this->extractWhatsappMediaUrls($message);
+
+        if (! $accountSid || ! $authToken || ! $from) {
+            return ['failed', 'Twilio WhatsApp is not fully configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_WHATSAPP_FROM.'];
+        }
+
+        if ($body === '' && empty($mediaUrls)) {
+            return ['failed', 'WhatsApp message body is empty and no media attachments were found.'];
+        }
+
+        $payload = [
+            'To' => $this->normalizeWhatsappAddress($recipient),
+            'From' => $this->normalizeWhatsappAddress($from),
+        ];
+
+        if ($body !== '') {
+            $payload['Body'] = $body;
+        }
+
+        if (! empty($mediaUrls)) {
+            // Free-form WhatsApp delivery supports one media object per message.
+            $payload['MediaUrl'] = $mediaUrls[0];
+        }
+
+        $response = Http::asForm()
+            ->withBasicAuth($accountSid, $authToken)
+            ->post("https://api.twilio.com/2010-04-01/Accounts/{$accountSid}/Messages.json", $payload);
+
+        if ($response->successful()) {
+            return ['sent', null];
+        }
+
+        $error = data_get($response->json(), 'message') ?: $response->body() ?: 'Twilio WhatsApp request failed.';
+
+        return ['failed', $error];
+    }
+
     private function resolveRecipient(LoyaltyMember $customer, string $channel): ?string
     {
         return match ($channel) {
@@ -228,6 +275,111 @@ class CampaignExecutionService
         }
 
         return '+' . preg_replace('/\D+/', '', $phoneNumber);
+    }
+
+    private function normalizeWhatsappAddress(string $phoneNumber): string
+    {
+        $normalizedNumber = $this->normalizePhoneNumber(
+            Str::startsWith($phoneNumber, 'whatsapp:')
+                ? substr($phoneNumber, 9)
+                : $phoneNumber
+        );
+
+        return 'whatsapp:' . $normalizedNumber;
+    }
+
+    private function prepareWhatsappBody(?string $message): string
+    {
+        $plainText = trim(html_entity_decode(strip_tags((string) $message), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+
+        return preg_replace('/\s+/', ' ', $plainText) ?? $plainText;
+    }
+
+    private function extractWhatsappMediaUrls(?string $message): array
+    {
+        if (! $message) {
+            return [];
+        }
+
+        preg_match_all('/<img[^>]+src=["\']([^"\']+)["\']/i', $message, $matches);
+
+        if (empty($matches[1])) {
+            return [];
+        }
+
+        $mediaUrls = [];
+
+        foreach ($matches[1] as $source) {
+            $url = $this->resolvePublicMediaUrl($source);
+
+            if ($url) {
+                $mediaUrls[] = $url;
+            }
+        }
+
+        return array_values(array_unique($mediaUrls));
+    }
+
+    private function resolvePublicMediaUrl(string $source): ?string
+    {
+        $source = trim($source);
+
+        if ($source === '' || Str::startsWith($source, 'cid:') || Str::startsWith($source, 'data:')) {
+            return null;
+        }
+
+        if (Str::startsWith($source, ['http://', 'https://'])) {
+            return $this->rewriteToPublicAssetUrl($source) ?? $source;
+        }
+
+        $publicBaseUrl = rtrim((string) (config('app.asset_url') ?: config('app.url')), '/');
+
+        if ($publicBaseUrl === '') {
+            return null;
+        }
+
+        if (Str::startsWith($source, '//')) {
+            $scheme = parse_url($publicBaseUrl, PHP_URL_SCHEME) ?: 'https';
+
+            return $scheme . ':' . $source;
+        }
+
+        if (Str::startsWith($source, '/')) {
+            return $publicBaseUrl . $source;
+        }
+
+        return $publicBaseUrl . '/' . ltrim($source, '/');
+    }
+
+    private function rewriteToPublicAssetUrl(string $source): ?string
+    {
+        $publicBaseUrl = rtrim((string) config('app.asset_url'), '/');
+
+        if ($publicBaseUrl === '') {
+            return null;
+        }
+
+        $host = strtolower((string) parse_url($source, PHP_URL_HOST));
+
+        if (! in_array($host, ['localhost', '127.0.0.1'], true)) {
+            return null;
+        }
+
+        $path = parse_url($source, PHP_URL_PATH);
+
+        if (! $path) {
+            return null;
+        }
+
+        if (Str::startsWith($path, '/PBbackend/public/')) {
+            return $publicBaseUrl . substr($path, strlen('/PBbackend/public'));
+        }
+
+        if (Str::startsWith($path, '/uploads/')) {
+            return $publicBaseUrl . $path;
+        }
+
+        return $publicBaseUrl . '/' . ltrim($path, '/');
     }
 
     private function renderTemplate(?string $content, LoyaltyMember $customer): ?string
@@ -282,12 +434,21 @@ class CampaignExecutionService
 
         $appUrl = rtrim((string) config('app.url'), '/');
         $parsedPath = parse_url($source, PHP_URL_PATH);
+        $templateImagePath = $this->resolveTemplateImageStoragePath($parsedPath ?: $source);
 
         if (Str::startsWith($source, '/')) {
+            if ($templateImagePath) {
+                return $templateImagePath;
+            }
+
             return public_path(ltrim($source, '/'));
         }
 
         if ($appUrl !== '' && Str::startsWith($source, $appUrl) && $parsedPath) {
+            if ($templateImagePath) {
+                return $templateImagePath;
+            }
+
             return public_path(ltrim($parsedPath, '/'));
         }
 
@@ -295,6 +456,24 @@ class CampaignExecutionService
             return public_path(ltrim($parsedPath, '/'));
         }
 
+        if ($templateImagePath) {
+            return $templateImagePath;
+        }
+
         return null;
+    }
+
+    private function resolveTemplateImageStoragePath(string $path): ?string
+    {
+        $path = trim($path);
+
+        if ($path === '' || ! preg_match('#/message-templates/images/([A-Za-z0-9._-]+)$#', $path, $matches)) {
+            return null;
+        }
+
+        $filename = basename($matches[1]);
+        $storagePath = storage_path('app/public/message-templates/' . $filename);
+
+        return is_file($storagePath) ? $storagePath : null;
     }
 }

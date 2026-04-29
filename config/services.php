@@ -48,9 +48,11 @@ return [
         'auth_token' => env('TWILIO_AUTH_TOKEN'),
         'from' => env('TWILIO_FROM'),
         'messaging_service_sid' => env('TWILIO_MESSAGING_SERVICE_SID'),
+        'whatsapp_from' => env('TWILIO_WHATSAPP_FROM', env('TWILIO_FROM')),
     ],
 
     'whatsapp' => [
+        'provider' => env('WHATSAPP_PROVIDER', 'twilio'),
         'webhook_url' => env('WHATSAPP_WEBHOOK_URL'),
         'token' => env('WHATSAPP_WEBHOOK_TOKEN'),
     ],
